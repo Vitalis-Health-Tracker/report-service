@@ -173,7 +173,7 @@ public class ReportService {
         return reportRepo.save(newReport.block());
     }
 
-    @Scheduled(cron = "0 0 8 * * MON", zone = "Asia/Trivandrum")
+    @Scheduled(cron = "0 0 8 * * MON", zone = "Asia/Kolkata")
     public void weeklyReportGeneration() {
         Mono<List<String>> userIds = collectAllUsers();
         LocalDateTime startDate = LocalDateTime.now().minusDays(7);
