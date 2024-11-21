@@ -181,17 +181,17 @@ public class ReportService {
         }
     }
 
-    public Report getReport(String userId) {
-        LocalDateTime startDate = LocalDateTime.now().minusDays(7);
-        LocalDateTime endDate = LocalDateTime.now().minusDays(0);
-        Mono<Report> report = getReportByDate(LocalDateTime.now(), userId);
-        if(report.block() == null)
-        {
-            throw new RuntimeException("Report not found");
-        }
-        else
-        {
-            return report.block();
-        }
-    }
+//    public Report getReport(String userId) {
+//        LocalDateTime startDate = LocalDateTime.now().minusDays(7);
+//        LocalDateTime endDate = LocalDateTime.now().minusDays(0);
+//        Mono<Report> report = getReportByDate(LocalDateTime.now(), userId);
+//        if(report.block() == null)
+//        {
+//            throw new RuntimeException("Report not found");
+//        }
+//        else
+//        {
+//            return report.block();
+//        }
+//    }
 }

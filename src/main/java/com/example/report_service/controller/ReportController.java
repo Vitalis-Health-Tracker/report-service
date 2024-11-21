@@ -5,6 +5,9 @@ import com.example.report_service.service.ReportService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
+
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/report")
@@ -13,15 +16,10 @@ public class ReportController {
     private ReportService reportService;
 
     @GetMapping("/get-report/{userId}")
-    public ResponseEntity<Report> getReport(@PathVariable String userId){
-        try
-        {
-            return ResponseEntity.ok(reportService.getReport(userId));
-        }
-        catch (RuntimeException e)
-        {
-            return ResponseEntity.badRequest().body(null);
-        }
+    public Mono<ResponseEntity<Report>> getReport(@PathVariable String userId){
+        return reportService.getReportByDate(LocalDateTime.now(), userId)
+                .map(ResponseEntity::ok)
+                .onErrorResume(e -> Mono.just(ResponseEntity.badRequest().body(null)));
     }
 
     @GetMapping("/generate-report")
