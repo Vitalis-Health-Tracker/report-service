@@ -10,7 +10,7 @@ spring:
   data:
     mongodb:
       uri: mongodb+srv://admin:admin@bookservice.kgftc.mongodb.net/?retryWrites=true&w=majority&appName=BookService
-      database: reports
+      database: bookmanagement
   jpa:
     hibernate:
       ddl-auto: update

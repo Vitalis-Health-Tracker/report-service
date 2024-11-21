@@ -8,6 +8,7 @@ import com.example.report_service.model.Report;
 import com.example.report_service.repository.ReportRepo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cglib.core.Local;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -38,7 +39,7 @@ public class ReportService {
         return webClient.get()
                 .uri("http://localhost:9093/diet/"+userId+ "/get-diet-week?startDate="+startDate+"&endDate="+endDate)
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, response -> Mono.error(new RuntimeException("Something Went Wrong!!")))
+                .onStatus(HttpStatusCode::isError, response -> Mono.error(new RuntimeException("Diet Went Wrong!!")))
                 .bodyToFlux(DietDto.class)
                 .collectList();
     }
@@ -48,7 +49,7 @@ public class ReportService {
         return webClient.get()
                 .uri("http://localhost:9092/health/fitness/"+userId+ "/get-workouts?startDate="+startDate+"&endDate="+endDate)
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, response -> Mono.error(new RuntimeException("Something Went Wrong!!")))
+                .onStatus(HttpStatusCode::isError, response -> Mono.error(new RuntimeException("Fitness Went Wrong!!")))
                 .bodyToFlux(FitnessDto.class)
                 .collectList();
     }
@@ -58,7 +59,7 @@ public class ReportService {
         return webClient.get()
                 .uri("http://localhost:9094/wellbeing/date?userId="+userId+"&startDate="+startDate+"&endDate="+endDate)
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, response -> Mono.error(new RuntimeException("Something Went Wrong!!")))
+                .onStatus(HttpStatusCode::isError, response -> Mono.error(new RuntimeException("Wellbeing Went Wrong!!")))
                 .bodyToFlux(WellbeingDto.class)
                 .collectList();
     }
@@ -66,9 +67,9 @@ public class ReportService {
     private Mono<UserDto> collectUserData(String userId)
     {
         return webClient.get()
-                .uri("http://localhost:9091/"+userId+"/get-details")
+                .uri("http://localhost:9091/user/"+userId+"/get-details")
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, response -> Mono.error(new RuntimeException("Something Went Wrong!!")))
+                .onStatus(HttpStatusCode::isError, response -> Mono.error(new RuntimeException("User Went Wrong!!")))
                 .bodyToMono(UserDto.class);
     }
 
@@ -77,110 +78,106 @@ public class ReportService {
         return webClient.get()
                 .uri("http://localhost:9091/user/get-all-ids")
                 .retrieve()
-                .onStatus(HttpStatusCode::isError, response -> Mono.error(new RuntimeException("Something Went Wrong!!")))
-                .bodyToFlux(String.class)
-                .collectList();
+                .onStatus(HttpStatusCode::isError, response -> Mono.error(new RuntimeException("UserIds Went Wrong!!")))
+                .bodyToMono(new ParameterizedTypeReference<List<String>>() {});
+                //.collectList();
 
     }
 
     public Mono<Report> generateReport(String userId, LocalDateTime startDate, LocalDateTime endDate) {
-        Float total = 0f;
-        Float bmr;
-        Mono<Report> newReport = Mono.zip(
-                collectDietData(userId, startDate, endDate),
-                collectFitnessData(userId, startDate, endDate),
-                collectWellbeingData(userId, startDate, endDate),
-                collectUserData(userId)
-            ).flatMap(tuple -> {
-                Report report = new Report();
-                report.setUserId(userId);
-                report.setReportDate(LocalDateTime.now());
-                report.setDiet(tuple.getT1());
-                report.setFitness(tuple.getT2());
-                report.setWellbeing(tuple.getT3());
-                report.setUser(tuple.getT4());
-                return Mono.just(report);
-            });
-        for(DietDto dietDto : Objects.requireNonNull(newReport.block()).getDiet())
-        {
-            total = total + dietDto.getTotalCaloriesConsumed();
-        }
-        newReport.block().setFinalCaloriesConsumed(total);
+        return Mono.zip(
+                        collectDietData(userId, startDate, endDate),  // List<DietDto>
+                        collectFitnessData(userId, startDate, endDate),  // List<FitnessDto>
+                        collectWellbeingData(userId, startDate, endDate),  // List<WellbeingDto>
+                        collectUserData(userId)  // UserDto
+                )
+                .map(tuple -> {
+                    // Get the lists from the tuple
+                    List<DietDto> diet = tuple.getT1();
+                    List<FitnessDto> fitness = tuple.getT2();
+                    List<WellbeingDto> wellbeing = tuple.getT3();
+                    UserDto user = tuple.getT4();
 
-        for(FitnessDto fitnessDto : Objects.requireNonNull(newReport.block()).getFitness())
-        {
-            total = total - fitnessDto.getTotalCaloriesBurned();
-        }
-        newReport.block().setFinalCaloriesBurned(total);
+                    // Calculate the total calories consumed from the diet list
+                    Float totalCaloriesConsumed = diet.stream()
+                            .map(DietDto::getTotalCaloriesConsumed)
+                            .reduce(0f, Float::sum);  // Sum of all consumed calories
 
-        if(Objects.requireNonNull(newReport.block()).getUser().getGender().equals("Male"))
-        {
-            bmr = (float) (((10 * Objects.requireNonNull(newReport.block()).getUser().getWeight()) + (6.25 * Objects.requireNonNull(newReport.block()).getUser().getHeight()) - (5 * Objects.requireNonNull(newReport.block()).getUser().getAge()) + 5)*7);
-            newReport.block().setUserCalorie(bmr);
-        }
-        else
-        {
-            bmr = (float) (((10 * Objects.requireNonNull(newReport.block()).getUser().getWeight()) + (6.25 * Objects.requireNonNull(newReport.block()).getUser().getHeight()) - (5 * Objects.requireNonNull(newReport.block()).getUser().getAge()) - 161)*7);
-            newReport.block().setUserCalorie(bmr);
-        }
+                    // Calculate the total calories burned from the fitness list
+                    Float totalCaloriesBurned = fitness.stream()
+                            .map(FitnessDto::getTotalCaloriesBurned)
+                            .reduce(0f, Float::sum);  // Sum of all burned calories
 
-        if(Objects.requireNonNull(newReport.block()).getUser().getJourney().equals("WEIGHT_LOSS"))
-        {
-            if(Objects.requireNonNull(newReport.block()).getFinalCaloriesConsumed() > (bmr-(bmr*0.25)))
-            {
-                newReport.block().setStatus("You are doing great!!!");
-            }
-            else if (Objects.requireNonNull(newReport.block()).getFinalCaloriesConsumed() < (bmr-(bmr*0.25)))
-            {
-                newReport.block().setStatus("There is mild progress.. we need to try harder!!");
-            }
-            else
-            {
-                newReport.block().setStatus("We need to work harder!!!");
-            }
-        }
-        else if(Objects.requireNonNull(newReport.block()).getUser().getJourney().equals("MAINTAIN"))
-        {
-            if(Objects.requireNonNull(newReport.block()).getFinalCaloriesConsumed() == bmr)
-            {
-                newReport.block().setStatus("You are doing great!!!");
-            }
-            else if (Objects.requireNonNull(newReport.block()).getFinalCaloriesConsumed() < bmr)
-            {
-                newReport.block().setStatus("You might be losing weight slightly... be careful");
-            }
-            else
-            {
-                newReport.block().setStatus("You may be gaining weight... be careful");
-            }
-        }
-        else
-        {
-            if(Objects.requireNonNull(newReport.block()).getFinalCaloriesConsumed() > (bmr+(bmr*0.25)))
-            {
-                newReport.block().setStatus("You are doing great!!!");
-            }
-            else if (Objects.requireNonNull(newReport.block()).getFinalCaloriesConsumed() < (bmr+(bmr*0.25)))
-            {
-                newReport.block().setStatus("There is mild progress.. we need to try harder!!");
-            }
-            else
-            {
-                newReport.block().setStatus("We need to work harder!!!");
-            }
-        }
+                    // Calculate BMR based on user's gender
+                    Float bmr;
+                    if ("Male".equals(user.getGender())) {
+                        bmr = (float) (((10 * user.getWeight()) + (6.25 * user.getHeight()) - (5 * user.getAge()) + 5) * 7);
+                    } else {
+                        bmr = (float) (((10 * user.getWeight()) + (6.25 * user.getHeight()) - (5 * user.getAge()) - 161) * 7);
+                    }
 
-        return reportRepo.save(newReport.block());
+                    // Build the report object
+                    Report report = new Report();
+                    report.setUserId(userId);
+                    report.setReportDate(LocalDateTime.now());
+                    report.setDiet(diet);  // Assigning the list of DietDto
+                    report.setFitness(fitness);  // Assigning the list of FitnessDto
+                    report.setWellbeing(wellbeing);  // Assigning the list of WellbeingDto
+                    report.setUser(user);  // Assigning the UserDto
+                    report.setFinalCaloriesConsumed(totalCaloriesConsumed);  // Set the total calories consumed
+                    report.setFinalCaloriesBurned(totalCaloriesBurned);  // Set the total calories burned
+                    report.setUserCalorie(bmr);  // Set the calculated BMR
+
+                    // Set Status based on journey type and calories
+                    if ("WEIGHT_LOSS".equals(user.getJourney())) {
+                        if (totalCaloriesConsumed > (bmr - (bmr * 0.25))) {
+                            report.setStatus("You are doing great!!!");
+                        } else if (totalCaloriesConsumed < (bmr - (bmr * 0.25))) {
+                            report.setStatus("There is mild progress.. we need to try harder!!");
+                        } else {
+                            report.setStatus("We need to work harder!!!");
+                        }
+                    } else if ("MAINTAIN".equals(user.getJourney())) {
+                        if (totalCaloriesConsumed == bmr) {
+                            report.setStatus("You are doing great!!!");
+                        } else if (totalCaloriesConsumed < bmr) {
+                            report.setStatus("You might be losing weight slightly... be careful");
+                        } else {
+                            report.setStatus("You may be gaining weight... be careful");
+                        }
+                    } else {
+                        if (totalCaloriesConsumed > (bmr + (bmr * 0.25))) {
+                            report.setStatus("You are doing great!!!");
+                        } else if (totalCaloriesConsumed < (bmr + (bmr * 0.25))) {
+                            report.setStatus("There is mild progress.. we need to try harder!!");
+                        } else {
+                            report.setStatus("We need to work harder!!!");
+                        }
+                    }
+                    return report;
+                })
+                .flatMap(reportRepo::save);
     }
 
     @Scheduled(cron = "0 0 8 * * MON", zone = "Asia/Kolkata")
     public void weeklyReportGeneration() {
-        Mono<List<String>> userIds = collectAllUsers();
-        LocalDateTime startDate = LocalDateTime.now().minusDays(7);
-        LocalDateTime endDate = LocalDateTime.now();
-        for(String userId : Objects.requireNonNull(userIds.block()))
+        try {
+            Mono<List<String>> userIds = collectAllUsers();
+            LocalDateTime startDate = LocalDateTime.now().minusDays(7);
+            LocalDateTime endDate = LocalDateTime.now();
+            System.out.println("mono userIds : " + userIds);
+
+            userIds.flatMapMany(Flux::fromIterable)
+                    .flatMap(userId -> {
+                        return generateReport(userId, startDate, endDate);
+                    })
+                    .doOnError(e -> System.out.println("Error generating report: " + e.getMessage()))
+                    .subscribe();
+
+        }
+        catch(Exception e)
         {
-            generateReport(userId, startDate, endDate);
+            System.out.println(e.getMessage());
         }
     }
 
