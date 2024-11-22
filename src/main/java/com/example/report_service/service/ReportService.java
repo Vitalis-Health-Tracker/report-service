@@ -111,9 +111,9 @@ public class ReportService {
                     // Calculate BMR based on user's gender
                     Float bmr;
                     if ("Male".equals(user.getGender())) {
-                        bmr = (float) (((10 * user.getWeight()) + (6.25 * user.getHeight()) - (5 * user.getAge()) + 5) * 7);
+                        bmr = (float) (((10 * user.getWeight()) + (6.25 * user.getHeight()) - (5 * user.getAge()) + 5));
                     } else {
-                        bmr = (float) (((10 * user.getWeight()) + (6.25 * user.getHeight()) - (5 * user.getAge()) - 161) * 7);
+                        bmr = (float) (((10 * user.getWeight()) + (6.25 * user.getHeight()) - (5 * user.getAge()) - 161));
                     }
 
                     // Build the report object
